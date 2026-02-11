@@ -23,7 +23,29 @@ dotenv.config()
 
 const app: express.Application = express()
 
-app.use(cors())
+/**
+ * CORS Configuration
+ * Updated to allow both local development and your specific Vercel deployment
+ */
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://flash-sale-engine.vercel.app',
+  'https://flash-sale-engine-qixk7z1oo-abisheks-projects-1594de12.vercel.app' // From your screenshot
+];
+
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  credentials: true
+}))
+
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
 
@@ -50,6 +72,7 @@ app.use(
  * error handler middleware
  */
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error('Server Error:', error); // Log the actual error for debugging in Render logs
   res.status(500).json({
     success: false,
     error: 'Server internal error',
