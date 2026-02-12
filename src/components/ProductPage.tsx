@@ -92,14 +92,18 @@ const ProductPage: React.FC = () => {
 
     try {
       // Optimistic UI handled by the loading state disabling the button
-      const result = await api.buyProduct('sneaker-001', userId);
+      // Generate a unique ID for THIS specific click attempt (Idempotency Key)
+      const idempotencyKey = crypto.randomUUID();
+      const result = await api.buyProduct('sneaker-001', userId, idempotencyKey);
       
       if (result.success) {
         // We wait for the socket event to confirm success
         // But we can show a "Processing..." message in the UI via the loading state
         console.log("Purchase request sent, waiting for confirmation...");
       } else {
-        setError(result.message || "Purchase failed");
+        // Handle specific error messages
+        const errorMsg = result.message || "Purchase failed";
+        setError(errorMsg);
         setLoading(false);
         fetchStock();
       }

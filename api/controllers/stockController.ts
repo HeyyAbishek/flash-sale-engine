@@ -1,4 +1,5 @@
-import { Request, Response } from 'express';
+import { type Request, type Response } from 'express';
+// Note: Adjust imports if your file structure is different (e.g. ../db/index.js)
 import pool from '../db.js';
 import { getIo } from '../socket.js';
 import * as stockService from '../services/stockService.js';
@@ -10,48 +11,69 @@ export const getStock = async (req: Request, res: Response) => {
   try {
     const { productId } = req.query;
     const targetId = typeof productId === 'string' ? productId : 'sneaker-001';
-
-    // Using existing service to fetch stock
     const stock = await stockService.getStock(targetId);
-    
-    // Maintaining contract with frontend { success: true, remainingStock: number }
-    res.json({
-      success: true,
-      remainingStock: stock
-    });
+    res.json({ success: true, remainingStock: stock });
   } catch (error) {
     console.error('Error fetching stock:', error);
     res.status(500).json({ error: 'Failed to fetch stock' });
   }
 };
 
-// --- Existing Purchase ---
+// --- MERGED: Purchase with Idempotency + Rate Limiting ---
 export const purchase = async (req: Request, res: Response) => {
-  const { productId, userId } = req.body;
-  const id = productId || "sneaker-001";
-  const uid = userId || randomUUID();
-  
   try {
-    // Rate Limiting Logic
+    const { productId, userId } = req.body;
+    // Get the key from headers
+    const idempotencyKey = req.headers['idempotency-key'] as string;
+
+    // 🛑 1. IDEMPOTENCY VALIDATION (Must have a key)
+    if (!idempotencyKey) {
+       res.status(400).json({ error: 'Missing Idempotency-Key header' });
+       return;
+    }
+
+    const id = productId || "sneaker-001";
+    const uid = userId || randomUUID();
+
+    // 🛑 2. IDEMPOTENCY GATEKEEPER (The "Double Click" Blocker)
+    // Tries to set key. If it exists, it fails.
+    const isNewRequest = await redis.set(
+      `req:${idempotencyKey}`,
+      'processing',
+      'EX',
+      10, // 10 seconds lockout
+      'NX'
+    );
+
+    if (!isNewRequest) {
+      console.log(`Duplicate request blocked: ${idempotencyKey}`);
+      res.status(409).json({
+        success: false,
+        message: 'Duplicate request detected. Don\'t double click!'
+      });
+      return;
+    }
+
+    // 🛑 3. RATE LIMITING (The "Spam" Blocker)
     const rateLimitKey = `rate_limit:${uid}`;
     const isRateLimited = await redis.get(rateLimitKey);
 
     if (isRateLimited) {
-      return res.status(429).json({
-        success: false,
-        message: "Please wait 5 seconds between requests",
-        remainingStock: 0
-      });
+       res.status(429).json({
+         success: false,
+         message: "Please wait 5 seconds between requests",
+         remainingStock: 0
+       });
+       return;
     }
 
-    // Set rate limit key for 5 seconds
+    // Set rate limit for next 5 seconds
     await redis.set(rateLimitKey, '1', 'EX', 5);
 
-    // Push job to Redis Queue
+    // ✅ 4. SUCCESS: Push to Redis Queue
     const job = { userId: uid, productId: id };
     await redis.lpush('buy_queue', JSON.stringify(job));
     
-    // Optimistic response
     const currentStock = await stockService.getStock(id);
     
     res.json({
@@ -59,23 +81,22 @@ export const purchase = async (req: Request, res: Response) => {
       message: 'Request Received. Processing...',
       remainingStock: currentStock
     });
+
   } catch (error) {
     console.error('Redis error:', error);
     res.status(500).json({ success: false, message: "Error queuing purchase request" });
   }
 };
 
-// --- NEW: Restock Feature ---
+// --- Existing Restock ---
 export const restock = async (req: Request, res: Response) => {
   try {
     const { productId, amount } = req.body;
     const targetId = productId || 'sneaker-001';
     const newStock = amount || 100;
 
-    // 1. Update Database
     await pool.query('UPDATE products SET stock_quantity = $1 WHERE id = $2', [newStock, targetId]);
 
-    // 2. Notify Frontend via WebSocket
     try {
       const io = getIo();
       io.emit('stock-update', { productId: targetId, stock: newStock });
