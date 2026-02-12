@@ -24,27 +24,27 @@ dotenv.config()
 const app: express.Application = express()
 
 /**
- * CORS Configuration
- * Updated to allow both local development and your specific Vercel deployment
+ * 🛡️ CORS Configuration: The "Silver Bullet"
+ * This allows localhost (for you) and ANY Vercel deployment automatically.
  */
-const allowedOrigins = [
-  'http://localhost:5173',
-  'https://flash-sale-engine.vercel.app',
-  'https://flash-sale-engine-qixk7z1oo-abisheks-projects-1594de12.vercel.app' // From your screenshot
-];
-
 app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps or curl requests)
+  origin: (origin, callback) => {
+    // 1. Allow requests with no origin (like mobile apps or curl)
     if (!origin) return callback(null, true);
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
-    }
-    return callback(null, true);
+
+    // 2. Allow Localhost (for development)
+    if (origin.startsWith('http://localhost')) return callback(null, true);
+
+    // 3. Allow ANY Vercel Deployment (Production, Preview, & Branch URLs)
+    // This fixes the error where Vercel generates a unique URL that wasn't in your list
+    if (origin.endsWith('.vercel.app')) return callback(null, true);
+
+    // 4. Block everything else
+    const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+    return callback(new Error(msg), false);
   },
   credentials: true
-}))
+}));
 
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true, limit: '10mb' }))
