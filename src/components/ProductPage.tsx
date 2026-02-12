@@ -46,6 +46,11 @@ const ProductPage: React.FC = () => {
       setTimeout(() => setShowPopup(false), 5000);
     });
 
+    socketRef.current.on('stock-update', (data: any) => {
+      console.log('Stock update event:', data);
+      setStock(data.stock);
+    });
+
     socketRef.current.on('order_failed', (data: any) => {
       console.log('Order failed event:', data);
       setLoading(false);
