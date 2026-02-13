@@ -19,72 +19,64 @@ export const getStock = async (req: Request, res: Response) => {
   }
 };
 
-// --- MERGED: Purchase with Idempotency + Rate Limiting ---
+// --- OPTIMIZED PURCHASE (Fire and Forget) ---
 export const purchase = async (req: Request, res: Response) => {
   try {
     const { productId, userId } = req.body;
-    // Get the key from headers
     const idempotencyKey = req.headers['idempotency-key'] as string;
 
-    // 🛑 1. IDEMPOTENCY VALIDATION (Must have a key)
+    // 1. Idempotency Check
     if (!idempotencyKey) {
        res.status(400).json({ error: 'Missing Idempotency-Key header' });
        return;
     }
 
-    const id = productId || "sneaker-001";
-    const uid = userId || randomUUID();
-
-    // 🛑 2. IDEMPOTENCY GATEKEEPER (The "Double Click" Blocker)
-    // Tries to set key. If it exists, it fails.
+    // 2. Gatekeeper (Redis)
     const isNewRequest = await redis.set(
       `req:${idempotencyKey}`,
       'processing',
       'EX',
-      10, // 10 seconds lockout
+      10,
       'NX'
     );
 
     if (!isNewRequest) {
-      console.log(`Duplicate request blocked: ${idempotencyKey}`);
       res.status(409).json({
         success: false,
-        message: 'Duplicate request detected. Don\'t double click!'
+        message: 'Duplicate request detected.'
       });
       return;
     }
 
-    // 🛑 3. RATE LIMITING (The "Spam" Blocker)
+    // 3. Rate Limiting
+    const uid = userId || "guest";
     const rateLimitKey = `rate_limit:${uid}`;
     const isRateLimited = await redis.get(rateLimitKey);
 
     if (isRateLimited) {
        res.status(429).json({
          success: false,
-         message: "Please wait 5 seconds between requests",
-         remainingStock: 0
+         message: "Please wait 5 seconds."
        });
        return;
     }
-
-    // Set rate limit for next 5 seconds
     await redis.set(rateLimitKey, '1', 'EX', 5);
 
-    // ✅ 4. SUCCESS: Push to Redis Queue
-    const job = { userId: uid, productId: id };
+    // 4. THE FIX: Just Queue and Return! 🚀
+    // Do NOT wait for database (stockService.getStock) here.
+    const job = { userId: uid, productId: productId || "sneaker-001" };
     await redis.lpush('buy_queue', JSON.stringify(job));
     
-    const currentStock = await stockService.getStock(id);
-    
+    // Respond immediately!
     res.json({
       success: true,
-      message: 'Request Received. Processing...',
-      remainingStock: currentStock
+      message: 'Order Queued!',
+      // Frontend should rely on WebSocket for the actual number, not this response
     });
 
   } catch (error) {
     console.error('Redis error:', error);
-    res.status(500).json({ success: false, message: "Error queuing purchase request" });
+    res.status(500).json({ success: false, message: "Error queuing request" });
   }
 };
 

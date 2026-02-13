@@ -112,29 +112,45 @@ const ProductPage: React.FC = () => {
     if (stock === 0) return;
     
     setLoading(true);
-    setError(null);
-    setPurchaseSuccess(false);
+    
+    // 1. Create a Timeout Promise (Force stop after 5 seconds)
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error("Request Timed Out")), 5000)
+    );
 
     try {
-      // Optimistic UI handled by the loading state disabling the button
-      // Generate a unique ID for THIS specific click attempt (Idempotency Key)
       const idempotencyKey = crypto.randomUUID();
-      const result = await api.buyProduct('sneaker-001', userId, idempotencyKey);
+
+      // 2. Race the Fetch against the Timeout
+      const response = await Promise.race([
+        fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/buy`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Idempotency-Key': idempotencyKey 
+          },
+          body: JSON.stringify({ productId: 'sneaker-001', userId: userId || 'guest' }),
+        }),
+        timeoutPromise
+      ]) as Response;
+
+      const data = await response.json();
       
-      if (result.success) {
+      if (response.ok) {
         // We wait for the socket event to confirm success
         // But we can show a "Processing..." message in the UI via the loading state
         console.log("Purchase request sent, waiting for confirmation...");
+      } else if (response.status === 409) {
+        setError("Duplicate request blocked!");
       } else {
-        // Handle specific error messages
-        const errorMsg = result.message || "Purchase failed";
-        setError(errorMsg);
-        setLoading(false);
-        fetchStock();
+        setError(data.message || "Failed");
       }
     } catch (err) {
-      setError("Network error. Please try again.");
-      setLoading(false);
+      console.error('Purchase failed:', err);
+      // Even if it times out, the Order might still process in the background!
+      setError("Request Sent (Check Stock)");
+    } finally {
+      setLoading(false); // 🛑 Spinner will ALWAYS stop now.
     }
   };
 
