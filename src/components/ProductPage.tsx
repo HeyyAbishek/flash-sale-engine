@@ -111,6 +111,10 @@ const ProductPage: React.FC = () => {
   const handleBuy = async () => {
     if (stock === 0) return;
     
+    // 🛑 FIX 1: Clear any previous messages immediately!
+    setError(null);
+    setPurchaseSuccess(false);
+
     setLoading(true);
     
     // 1. Create a Timeout Promise (Force stop after 5 seconds)
@@ -136,10 +140,13 @@ const ProductPage: React.FC = () => {
 
       const data = await response.json();
       
+      // 🛑 FIX 2: Handle the 429 specifically
       if (response.ok) {
         // We wait for the socket event to confirm success
         // But we can show a "Processing..." message in the UI via the loading state
         console.log("Purchase request sent, waiting for confirmation...");
+      } else if (response.status === 429) {
+        setError("Whoa! Too fast. Please wait 5s. ⏱️");
       } else if (response.status === 409) {
         setError("Duplicate request blocked!");
       } else {
