@@ -110,3 +110,40 @@ export const restock = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: 'Failed to restock' });
   }
 };
+
+// GET /api/status
+export const getSaleStatus = async (req: Request, res: Response) => {
+  try {
+    // 🛑 CHANGE: Default to 'open' so new users see the product immediately
+    const status = await redis.get('sale_status') || 'open';
+    res.json({ status });
+  } catch (error) {
+    console.error('Status check failed:', error);
+    // Fallback to open so the site doesn't break
+    res.status(500).json({ status: 'open' });
+  }
+};
+
+// POST /api/admin/open (The "God Mode" Switch)
+export const openSale = async (req: Request, res: Response) => {
+  try {
+    // 1. Set status to OPEN in Redis
+    await redis.set('sale_status', 'open');
+    
+    // 2. Scream it to everyone connected via WebSocket
+    const io = getIo();
+    io.emit('sale-status-change', { status: 'open' }); // <-- This triggers the redirect!
+    
+    res.json({ success: true, message: 'THE GATES ARE OPEN! 🚀' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to open sale' });
+  }
+};
+
+// POST /api/admin/close (Reset)
+export const closeSale = async (req: Request, res: Response) => {
+  await redis.set('sale_status', 'closed');
+  const io = getIo();
+  io.emit('sale-status-change', { status: 'closed' });
+  res.json({ success: true, message: 'Sale closed.' });
+};

@@ -3,7 +3,10 @@ import { Loader2, ShoppingBag, AlertCircle, CheckCircle2, X } from 'lucide-react
 import * as api from '../services/api';
 import { io, Socket } from 'socket.io-client';
 
+import { useNavigate } from 'react-router-dom';
+
 const ProductPage: React.FC = () => {
+  const navigate = useNavigate();
   const [stock, setStock] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -18,6 +21,23 @@ const ProductPage: React.FC = () => {
   const sneakerImage = "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Limited%20edition%20sneaker%2C%20futuristic%20design%2C%20neon%20orange%20accents%2C%20high%20quality%20product%20photography%2C%20white%20background&image_size=square_hd";
 
   useEffect(() => {
+    // 1. Check Status immediately on load
+    fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/status`)
+      .then(res => res.json())
+      .then(data => {
+        if (data.status === 'closed') {
+          navigate('/waiting-room'); // 🚪 Kick them out if closed
+        }
+      });
+
+    // 2. Listen for "CLOSE" signal via WebSocket
+    const socket = io(import.meta.env.VITE_API_URL || 'http://localhost:3001');
+    socket.on('sale-status-change', (data) => {
+      if (data.status === 'closed') {
+        navigate('/waiting-room');
+      }
+    });
+
     // Generate or retrieve a persistent userId
     let storedUserId = localStorage.getItem('flash_sale_user_id');
     if (!storedUserId) {
@@ -36,6 +56,11 @@ const ProductPage: React.FC = () => {
       socketRef.current?.emit('join', storedUserId);
     });
 
+    // Clean up duplicate listener for status change handled above
+    // socketRef.current.on('sale-status-change', ... ) is not needed here 
+    // because we have a dedicated socket for status checks above or we can reuse this one.
+    // For simplicity, let's keep the dedicated logic clean above and just handle stock/orders here.
+    
     socketRef.current.on('order_confirmed', (data: any) => {
       console.log('Order confirmed event:', data);
       setLoading(false);
@@ -70,7 +95,7 @@ const ProductPage: React.FC = () => {
         socketRef.current.disconnect();
       }
     };
-  }, []);
+  }, [navigate]);
 
   const fetchStock = async () => {
     try {
