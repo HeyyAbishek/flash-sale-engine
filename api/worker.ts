@@ -1,4 +1,4 @@
-import redis from './redis.js';
+import redis from './redis';   
 import * as stockService from './services/stockService.js';
 
 console.log('Worker started, listening for purchase requests...');
