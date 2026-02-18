@@ -5,6 +5,7 @@ import http from 'http';
 const PORT = process.env.PORT || 3001;
 const HOST = '0.0.0.0'; 
 
+// Create the HTTP server using the imported Express app
 const server = http.createServer(app);
 
 // 1. Initialize Socket.io and start the Redis listener
@@ -13,6 +14,7 @@ const io = initSocket(server);
 // 2. Attach io to the app instance for use in routes
 app.set('io', io); 
 
+// Start the server
 server.listen(Number(PORT), HOST, () => {
   console.log(`🚀 API Server ready on http://localhost:${PORT}`);
 });
