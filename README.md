@@ -5,6 +5,8 @@
 ![Latency](https://img.shields.io/badge/Latency-%3C100ms-green)
 
 **Flash Sale Engine** is a production-grade backend system designed to handle extreme traffic spikes during limited-inventory drops. It solves the "Double Booking" problem using **Postgres Row-Level Locking**, **Redis Queues**, and **WebSockets**.
+<img width="1920" height="970" alt="Screenshot 2026-02-19 003827" src="https://github.com/user-attachments/assets/f242ee6a-bed5-42fc-a79b-41865435777e" />
+
 
 ## 🚀 Live Demo
 
