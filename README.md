@@ -8,8 +8,6 @@
 
 ## 🚀 Live Demo
 
-
-
 **[👉 View Live Deployment](https://flash-sale-engine.vercel.app)**
 *(Open this in two different tabs to see the real-time stock sync in action!)*
 
@@ -24,6 +22,7 @@ I have documented the engineering decisions and system design in detail:
 ## ✨ Key Features
 
 * **Concurrency Control:** Uses `SELECT ... FOR UPDATE` (Pessimistic Locking) to strictly prevent negative stock.
+* **Idempotency:** Prevents accidental duplicate orders caused by network retries or "double-clicking" using unique request keys (Redis-backed).
 * **Traffic Throttling:** Implements a **Redis Message Queue (BullMQ)** to serialize thousands of concurrent requests.
 * **Real-Time Sync:** **Socket.io** broadcasts inventory changes to all connected clients in <50ms.
 * **Bot Protection:** Custom rate-limiting middleware to block aggressive scripts.
