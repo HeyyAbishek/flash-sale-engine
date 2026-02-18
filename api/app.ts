@@ -31,6 +31,11 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// 👇 ADD THIS "Health Check" ROUTE HERE (Must be before 404 handler) 👇
+app.get('/', (req: Request, res: Response) => {
+  res.status(200).send('Server is awake! 🚀');
+});
+
 // --- 🛠️ ADMIN & STATUS ROUTES ---
 
 /**
@@ -93,6 +98,7 @@ app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
   res.status(500).json({ success: false, error: 'Server internal error' });
 });
 
+// 404 Handler (Must be last)
 app.use((req: Request, res: Response) => {
   res.status(404).json({ success: false, error: 'API not found' });
 });

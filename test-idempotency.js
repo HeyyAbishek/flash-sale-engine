@@ -2,8 +2,12 @@
 const API_URL = "http://localhost:3001/api/buy";
 
 // 🔑 WE USE A STATIC KEY (Does not change!)
-const STATIC_KEY = "idempotency_test_key_999"; 
+// I changed the key slightly so it's a "fresh" test for the server
+const STATIC_KEY = "idempotency_test_key_REAL_ID_1"; 
 const USER_ID = "sneaker_fan_01";
+
+// 👇 YOUR REAL PRODUCT ID FROM NEON
+const REAL_PRODUCT_ID = "bea869fb-e8fe-4d54-bb13-b6c247663380";
 
 async function sendRequest(i) {
   try {
@@ -15,7 +19,7 @@ async function sendRequest(i) {
       },
       body: JSON.stringify({ 
           userId: USER_ID,
-          productId: "sneaker-001",
+          productId: REAL_PRODUCT_ID, // ✅ Now using the correct ID
           quantity: 1 
       }),
     });
@@ -23,10 +27,10 @@ async function sendRequest(i) {
     const data = await response.json();
     
     if (response.ok) {
-       console.log(`Request ${i}: ✅ SUCCESS (Stock Decreased)`);
+       console.log(`Request ${i}: ✅ SUCCESS (Sent to Queue)`);
     } else {
        // We EXPECT this to fail for requests 2, 3, 4, 5
-       console.log(`Request ${i}: 🛡️ BLOCKED (Idempotency Working) - Reason: ${JSON.stringify(data)}`);
+       console.log(`Request ${i}: 🛡️ BLOCKED (Idempotency Working) - Reason: ${data.message}`);
     }
     
   } catch (error) {
@@ -36,6 +40,7 @@ async function sendRequest(i) {
 
 async function runTest() {
   console.log(`🚀 Testing Idempotency with Key: ${STATIC_KEY}`);
+  console.log(`📦 Buying Product: ${REAL_PRODUCT_ID}`);
   console.log("---------------------------------------------------");
 
   // Send 5 requests back-to-back
