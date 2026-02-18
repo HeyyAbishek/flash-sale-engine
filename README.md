@@ -13,7 +13,11 @@
 ## 🚀 Live Demo
 
 
-https://github.com/user-attachments/assets/a66ae87d-3573-4cd6-985a-081d106abf4c
+
+https://github.com/user-attachments/assets/326b92e5-c6cc-4401-979c-5439b72ca637
+
+
+
 
 
 **[👉 View Live Deployment](https://flash-sale-engine-chi.vercel.app/)**
