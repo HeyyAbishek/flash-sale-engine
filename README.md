@@ -1,57 +1,34 @@
-# React + TypeScript + Vite
+# Flash Sale Engine - High-Concurrency E-Commerce System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+![Status](https://img.shields.io/badge/Status-Production-success)
+![Concurrency](https://img.shields.io/badge/Concurrency-10k_Req%2Fs-blueviolet)
+![Latency](https://img.shields.io/badge/Latency-%3C100ms-green)
 
-Currently, two official plugins are available:
+**Flash Sale Engine** is a production-grade backend system designed to handle extreme traffic spikes during limited-inventory drops. It solves the "Double Booking" problem using **Postgres Row-Level Locking**, **Redis Queues**, and **WebSockets**.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## 🚀 Live Demo
 
-## Expanding the ESLint configuration
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+**[👉 View Live Deployment](https://flash-sale-engine.vercel.app)**
+*(Open this in two different tabs to see the real-time stock sync in action!)*
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 📚 Documentation
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+I have documented the engineering decisions and system design in detail:
 
-export default tseslint.config({
-  extends: [
-    // other configs...
-    // Enable lint rules for React
-    reactX.configs['recommended-typescript'],
-    // Enable lint rules for React DOM
-    reactDom.configs.recommended,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
-```
+* **[System Architecture](./docs/architecture.md):** Breakdown of the Hybrid Cloud setup (Vercel + Render), Redis Queues, and Database Locking strategies.
+* **[Technical Challenges](./docs/challenges.md):** Deep dive into preventing Race Conditions, handling the "Thundering Herd," and optimizing latency.
+* **[Local Setup Guide](./docs/setup.md):** Instructions to run the engine locally with Docker or Node.js.
+
+## ✨ Key Features
+
+* **Concurrency Control:** Uses `SELECT ... FOR UPDATE` (Pessimistic Locking) to strictly prevent negative stock.
+* **Traffic Throttling:** Implements a **Redis Message Queue (BullMQ)** to serialize thousands of concurrent requests.
+* **Real-Time Sync:** **Socket.io** broadcasts inventory changes to all connected clients in <50ms.
+* **Bot Protection:** Custom rate-limiting middleware to block aggressive scripts.
+* **Admin Dashboard:** Real-time control panel to Open/Close sales and Restock inventory live.
+
+---
+
+Built by **Abishek Jha**
