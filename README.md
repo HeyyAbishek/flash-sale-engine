@@ -16,7 +16,7 @@
 https://github.com/user-attachments/assets/a66ae87d-3573-4cd6-985a-081d106abf4c
 
 
-**[👉 View Live Deployment](https://flash-sale-engine.vercel.app)**
+**[👉 View Live Deployment](https://flash-sale-engine-chi.vercel.app/)**
 *(Open this in two different tabs to see the real-time stock sync in action!)*
 
 ## 📚 Documentation
