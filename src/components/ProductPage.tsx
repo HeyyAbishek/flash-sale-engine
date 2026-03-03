@@ -71,6 +71,8 @@ const ProductPage: React.FC = () => {
     socketRef.current.on('stock-update', (data: any) => {
       console.log("📢 Global sync: Stock updated to", data.stock);
       setStock(data.stock);
+      // 🚀 THE FIX: If the stock updated, we know a process finished
+      setLoading(false); 
     });
 
     socketRef.current.on('sale-status-change', (data: any) => {

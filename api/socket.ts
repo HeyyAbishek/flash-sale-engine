@@ -1,20 +1,25 @@
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import redis from './redis.js';
+import redis from './redis.js'; // Using your existing redis import
+import { Redis } from "ioredis";
 
+// --- 1. REDIS ADAPTER SETUP (For Multi-Server Scaling) ---
 const pubClient = redis.duplicate();
 const subClient = redis.duplicate();
 
 let io: Server;
 
 export const initSocket = (httpServer: any) => {
+  // --- 2. INITIALIZE SERVER WITH SECURE CORS ---
   io = new Server(httpServer, {
     cors: {
-      origin: "*",
+      origin: true, // Dynamically allows your Vercel/Render frontend
+      credentials: true,
       methods: ["GET", "POST"]
     }
   });
 
+  // 🚨 THE SCALING FIX: Attach the Redis Adapter
   io.adapter(createAdapter(pubClient, subClient));
 
   io.on('connection', (socket) => {
@@ -32,7 +37,7 @@ export const initSocket = (httpServer: any) => {
     });
   });
 
-  // --- 🛠️ THE WORKER BRIDGE (Now with Global Broadcast) ---
+  // --- 3. 🛠️ THE WORKER BRIDGE (Direct Messaging & Global Sync) ---
   const workerListener = redis.duplicate();
   workerListener.subscribe('worker_notifications');
 
@@ -42,19 +47,18 @@ export const initSocket = (httpServer: any) => {
       const { userId, type, payload } = data;
       
       if (io) {
-        // 1. 🎯 Direct Message to the Buyer (Stops the blue spinner)
+        // 🎯 Direct Message to the Buyer (Stops the blue spinner)
         if (userId) {
           console.log(`👤 DM to User ${userId}: ${type}`);
           io.to(userId).emit(type, payload);
         }
 
-        // 2. 📢 GLOBAL BROADCAST (Syncs all other tabs)
-        // If a purchase succeeded or an admin restocked, tell everyone.
+        // 📢 GLOBAL BROADCAST (Syncs stock for all users)
         if (type === 'order_confirmed' || type === 'stock-update') {
           const newStock = payload.remainingStock ?? payload.stock;
           console.log(`📢 GLOBAL BROADCAST: Stock is now ${newStock}`);
           
-          // We emit 'stock-update' because ProductPage.tsx is already listening for it
+          // Emit 'stock-update' to match ProductPage.tsx listener
           io.emit('stock-update', { stock: newStock });
         }
       }

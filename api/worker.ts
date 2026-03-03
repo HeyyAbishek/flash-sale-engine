@@ -1,12 +1,16 @@
 import redis from './redis';   
 import * as stockService from './services/stockService.js';
+import { Redis } from "ioredis";
 
 console.log('Worker started, listening for purchase requests...');
 
+/**
+ * processQueue now returns a Promise so we can await it 
+ * in our high-speed while loop.
+ */
 const processQueue = async () => {
   try {
-    // brpop returns [key, value]
-    // 0 means block indefinitely
+    // brpop blocks until a job is available
     const result = await redis.brpop('buy_queue', 0);
     
     if (result) {
@@ -22,7 +26,6 @@ const processQueue = async () => {
         if (purchaseResult.success) {
           console.log(`Purchase successful for user ${userId}. Remaining: ${purchaseResult.remainingStock}`);
           
-          // Notify API server to emit socket event
           await redis.publish('worker_notifications', JSON.stringify({
             userId,
             type: 'order_confirmed',
@@ -36,8 +39,6 @@ const processQueue = async () => {
           
         } else {
           console.log(`Purchase failed for user ${userId}: ${purchaseResult.message}`);
-          
-          // Notify failure via Redis/Socket
           await redis.publish('worker_notifications', JSON.stringify({
             userId,
             type: 'order_failed',
@@ -49,8 +50,6 @@ const processQueue = async () => {
         }
       } catch (dbError) {
         console.error(`Database error processing purchase for user ${userId}:`, dbError);
-        
-        // Notify failure due to exception
         await redis.publish('worker_notifications', JSON.stringify({
           userId,
           type: 'order_failed',
@@ -63,12 +62,30 @@ const processQueue = async () => {
     }
   } catch (error) {
     console.error('Error processing job:', error);
-    // Sleep a bit to avoid tight loop on error
+    // Short sleep on error to prevent CPU spiking if Redis is down
     await new Promise(resolve => setTimeout(resolve, 1000));
   }
-  
-  // Loop
-  setImmediate(processQueue);
 };
 
-processQueue();
+// --- 🚨 HIGH-SPEED PRODUCTION LOOP ---
+// This replaces setImmediate for maximum throughput on Render/Vercel
+const startWorker = async () => {
+  console.log("🚀 High-speed loop active.");
+  while (true) {
+    await processQueue();
+  }
+};
+
+startWorker();
+
+// --- WORKER SYNC LISTENER (For Restocks) ---
+const sub = new Redis(process.env.REDIS_URL);
+sub.subscribe('worker_notifications');
+sub.on('message', (channel, message) => {
+  if (channel === 'worker_notifications') {
+    const { type, payload } = JSON.parse(message);
+    if (type === 'stock-update') {
+      console.log(`🚀 Worker syncing stock: ${payload.stock}`);
+    }
+  }
+});

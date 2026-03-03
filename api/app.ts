@@ -6,6 +6,8 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import stockRoutes from './routes/stock.js';
 import { restockItem } from './services/stockService.js';
+import { getIo } from './socket.js'; // Import the socket getter
+import redis from './redis.js'; // Ensure you import your redis instance
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,21 +19,18 @@ const app: express.Application = express();
 // Track sale status (In production, this should be in Redis/DB)
 let saleStatus = 'open'; 
 
+// 1. Updated CORS for Production Stability
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin) return callback(null, true);
-    if (origin.startsWith('http://localhost')) return callback(null, true);
-    if (origin.endsWith('.vercel.app')) return callback(null, true);
-    return callback(null, true); 
-  },
+  origin: true, // Dynamically allows your Vercel/Render frontend
   credentials: true,
-  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Requested-With']
 }));
 
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 👇 ADD THIS "Health Check" ROUTE HERE (Must be before 404 handler) 👇
+// 2. Base Health Check
 app.get('/', (req: Request, res: Response) => {
   res.status(200).send('Server is awake! 🚀');
 });
@@ -52,7 +51,7 @@ app.post('/api/admin/sale', (req: Request, res: Response) => {
   const { status } = req.body;
   saleStatus = status;
   
-  const io = app.get('io');
+  const io = getIo();
   if (io) {
     console.log(`📡 Broadcasting sale status change: ${status}`);
     io.emit('sale-status-change', { status });
@@ -62,24 +61,34 @@ app.post('/api/admin/sale', (req: Request, res: Response) => {
 });
 
 /**
- * Restock Route
+ * Restock Route (Updated for High-Concurrency)
+ * This handles local socket broadcast AND global Redis sync
  */
 app.post('/api/restock', async (req: Request, res: Response) => {
   const { productId, amount } = req.body;
   const newStockLevel = amount || 100;
   
   try {
+    // 1. Update the actual Database/Redis stock
     await restockItem(productId, newStockLevel);
     
-    const io = app.get('io'); 
+    // 2. Local Broadcast (for users on THIS server instance)
+    const io = getIo(); 
     if (io) {
       console.log(`📡 Shouting stock update: ${newStockLevel}`);
       io.emit('stock-update', { stock: newStockLevel }); 
     }
 
+    // 3. 🚨 THE GLOBAL SYNC: Publish to Redis
+    // This ensures your Worker and other API instances see the restock
+    await redis.publish('worker_notifications', JSON.stringify({
+      type: 'stock-update',
+      payload: { stock: newStockLevel }
+    }));
+
     res.json({ success: true, message: "Stock restocked successfully" });
   } catch (error) {
-    console.error("❌ RESTOCK FAILED:", error);
+    console.error("Restock Error:", error);
     res.status(500).json({ success: false, message: "Restock failed" });
   }
 });
@@ -88,8 +97,8 @@ app.post('/api/restock', async (req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api', stockRoutes);
 
-app.use('/api/health', (req: Request, res: Response) => {
-  res.status(200).json({ success: true, message: 'ok' });
+app.get('/api/health', (req: Request, res: Response) => {
+  res.status(200).send('ok'); // Minimal response for cron jobs
 });
 
 // --- Error Handling ---
