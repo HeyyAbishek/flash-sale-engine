@@ -22,7 +22,7 @@ export const initSocket = (httpServer: any) => {
   // --- 2. REDIS ADAPTER ---
   io.adapter(createAdapter(redis.duplicate(), redis.duplicate()));
 
-  // --- 3. THE TELEMETRY HEARTBEAT (Updated with Stickiness) ---
+  // --- 3. THE TELEMETRY HEARTBEAT (15s Command Saver) ---
   setInterval(async () => {
     if (io) {
       try {
@@ -32,11 +32,10 @@ export const initSocket = (httpServer: any) => {
 
         // 2. The "Stickiness" Logic: 
         // We check if there are ANY jobs currently in the pipeline.
-        // This prevents the UI from flickering to "Idle" too fast for the eye to see.
         const totalBacklog = counts.wait + counts.active;
         const isBusy = totalBacklog > 0;
 
-        // Telemetry pulse
+        // Telemetry pulse sent every 15 seconds to save Upstash command limits
         io.emit('system-telemetry', {
           activeUsers: userCount,
           queueLength: totalBacklog,
@@ -46,7 +45,7 @@ export const initSocket = (httpServer: any) => {
         console.error("Telemetry Error:", err);
       }
     }
-  }, 1000);
+  }, 15000); // 🎯 15-second interval: 93% fewer background commands
 
   // --- 4. CONNECTION LOGIC ---
   io.on('connection', (socket) => {
@@ -63,7 +62,7 @@ export const initSocket = (httpServer: any) => {
     });
   });
 
-  // --- 5. WORKER NOTIFICATION BRIDGE ---
+  // --- 5. WORKER NOTIFICATION BRIDGE (INSTANT POWER) ---
   const workerListener = redis.duplicate();
   workerListener.subscribe('worker_notifications');
 
@@ -73,10 +72,12 @@ export const initSocket = (httpServer: any) => {
       const { userId, type, payload } = data;
       
       if (io) {
+        // Personal notifications (Success/Failure) happen INSTANTLY
         if (userId) {
           io.to(userId).emit(type, payload);
         }
 
+        // Stock updates happen INSTANTLY, ignoring the 15s heartbeat
         if (type === 'order_confirmed' || type === 'stock-update') {
           const newStock = payload.remainingStock ?? payload.stock;
           io.emit('stock-update', { stock: newStock });
