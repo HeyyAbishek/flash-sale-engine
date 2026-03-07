@@ -8,7 +8,7 @@ export const orderQueue = new Queue('order-queue', {
   connection: redis.duplicate(),
 });
 
-console.log('🚀 BullMQ Worker: 40s Ultra-Quiet Mode Active');
+console.log('🚀 BullMQ Worker: 5-Minute Ultra-Quiet Mode Active');
 
 // --- 2. THE PROCESSING LOGIC ---
 const worker = new Worker(
@@ -49,15 +49,20 @@ const worker = new Worker(
   { 
     connection: redis.duplicate(),
     concurrency: 5,
-    // 🎯 ULTRA-QUIET SETTINGS (40 Seconds)
-    stalledInterval: 40000, // Checks for crashed jobs every 40s
-    lockDuration: 60000,    // Keep the lock for 60s
-    maxStalledCount: 1,     // Don't waste commands on repeat retries
+    // 🎯 MAXIMUM COMMAND SAVINGS (5 Minutes)
+    // This only affects how long we wait to retry a CRASHED job.
+    // It has NO effect on the speed of a normal purchase.
+    stalledInterval: 300000, // 5 minutes (300,000ms)
+    lockDuration: 360000,    // Lock duration must be slightly longer than the interval
+    maxStalledCount: 1,      
   }
 );
 
 // --- 3. WORKER SYNC LISTENER ---
-const sub = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+// 🎯 Added a .replace() here to strip any accidental quotes from Render!
+const redisUrl = (process.env.REDIS_URL || 'redis://localhost:6379').replace(/"/g, '');
+const sub = new Redis(redisUrl);
+
 sub.on('error', (err) => console.log('Redis Sub Error:', err.message));
 
 sub.subscribe('worker_notifications');
