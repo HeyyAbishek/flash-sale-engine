@@ -1,34 +1,35 @@
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import redis from './redis.js'; 
-import { orderQueue } from './worker.js'; // Ensure this matches your worker's exported queue
+import { orderQueue } from './worker.js'; 
 
 let io: Server;
 
 export const initSocket = (httpServer: any) => {
-  // --- 1. INITIALIZE SERVER WITH EXPLICIT CORS & TRANSPORTS ---
+  // --- 1. INITIALIZE SERVER WITH YOUR CLOUD URLS ---
   io = new Server(httpServer, {
     cors: {
-      origin: "http://localhost:5173", // Hardcoded for Vite local dev
+      origin: [
+        "https://flash-sale-engine-chi.vercel.app", // 🎯 Your Vercel URL
+        "http://localhost:5173"                    // Local development
+      ],
       credentials: true,
       methods: ["GET", "POST"]
     },
-    transports: ['polling', 'websocket'] // Force polling first for stability
+    transports: ['polling', 'websocket'] 
   });
 
   // --- 2. REDIS ADAPTER ---
   io.adapter(createAdapter(redis.duplicate(), redis.duplicate()));
 
-  // --- 3. THE TELEMETRY HEARTBEAT (With Debug Log) ---
+  // --- 3. THE TELEMETRY HEARTBEAT ---
   setInterval(async () => {
     if (io) {
       try {
         const counts = await orderQueue.getJobCounts('wait', 'active');
         const userCount = io.engine.clientsCount;
 
-        // 🕵️‍♂️ Debug Log to confirm backend is actually pulsing
-        console.log(`📡 TELEMETRY: Users: ${userCount} | Queue: ${counts.wait + counts.active} | DB: ${counts.active > 0 ? 'Writing' : 'Idle'}`);
-
+        // Telemetry pulse
         io.emit('system-telemetry', {
           activeUsers: userCount,
           queueLength: counts.wait + counts.active,
@@ -55,7 +56,7 @@ export const initSocket = (httpServer: any) => {
     });
   });
 
-  // --- 5. WORKER BRIDGE (UNTOUCHED) ---
+  // --- 5. WORKER NOTIFICATION BRIDGE ---
   const workerListener = redis.duplicate();
   workerListener.subscribe('worker_notifications');
 
@@ -66,13 +67,11 @@ export const initSocket = (httpServer: any) => {
       
       if (io) {
         if (userId) {
-          console.log(`👤 DM to User ${userId}: ${type}`);
           io.to(userId).emit(type, payload);
         }
 
         if (type === 'order_confirmed' || type === 'stock-update') {
           const newStock = payload.remainingStock ?? payload.stock;
-          console.log(`📢 GLOBAL BROADCAST: Stock is now ${newStock}`);
           io.emit('stock-update', { stock: newStock });
         }
       }
