@@ -22,18 +22,25 @@ export const initSocket = (httpServer: any) => {
   // --- 2. REDIS ADAPTER ---
   io.adapter(createAdapter(redis.duplicate(), redis.duplicate()));
 
-  // --- 3. THE TELEMETRY HEARTBEAT ---
+  // --- 3. THE TELEMETRY HEARTBEAT (Updated with Stickiness) ---
   setInterval(async () => {
     if (io) {
       try {
+        // 1. Get the current backlog (Wait + Active)
         const counts = await orderQueue.getJobCounts('wait', 'active');
         const userCount = io.engine.clientsCount;
+
+        // 2. The "Stickiness" Logic: 
+        // We check if there are ANY jobs currently in the pipeline.
+        // This prevents the UI from flickering to "Idle" too fast for the eye to see.
+        const totalBacklog = counts.wait + counts.active;
+        const isBusy = totalBacklog > 0;
 
         // Telemetry pulse
         io.emit('system-telemetry', {
           activeUsers: userCount,
-          queueLength: counts.wait + counts.active,
-          dbStatus: counts.active > 0 ? "Writing..." : "Idle"
+          queueLength: totalBacklog,
+          dbStatus: isBusy ? "Writing..." : "Idle"
         });
       } catch (err) {
         console.error("Telemetry Error:", err);

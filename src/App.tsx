@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import ProductPage from "./components/ProductPage";
 import WaitingRoom from "./components/WaitingRoom";
-import ArchitecturePanel from "./components/ArchitecturePanel"; // Added import
+import ArchitecturePanel from "./components/ArchitecturePanel";
 import toast, { Toaster } from 'react-hot-toast';
 
 function AdminPanel() {
@@ -14,7 +14,6 @@ function AdminPanel() {
         body: JSON.stringify({ status: action === 'open' ? 'open' : 'closed' }) 
       });
       
-      // 🍞 Professional Toast instead of Alert
       if (action === 'open') {
         toast.success("Sale is now OPEN 🔓");
       } else {
@@ -33,7 +32,6 @@ function AdminPanel() {
         body: JSON.stringify({ productId: 'bea869fb-e8fe-4d54-bb13-b6c247663380', amount: 100 }),
       });
       
-      // 👟 Clean success toast
       toast.success("👟 Stock Restocked to 100!");
     } catch (err) {
       toast.error("Restock failed");
@@ -67,7 +65,6 @@ function AdminPanel() {
 export default function App() {
   return (
     <Router>
-      {/* 🛑 Toaster component must be inside the Router but outside Routes */}
       <Toaster 
         position="top-right"
         toastOptions={{
@@ -81,15 +78,18 @@ export default function App() {
       <Routes>
         <Route path="/" element={
           <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-            <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
+            {/* Main Container expanded to 7xl to allow width for the wider shoe card */}
+            <div className="max-w-7xl w-full flex flex-col lg:flex-row gap-8 items-stretch justify-center">
               
-              {/* LEFT COLUMN: Your existing Shoe UI goes here */}
-              <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+              {/* LEFT COLUMN: Now using flex-1 to occupy all available space */}
+              <div className="flex-1 bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
                 <ProductPage />
               </div>
 
-              {/* RIGHT COLUMN: The new Engineering Dashboard */}
-              <ArchitecturePanel />
+              {/* RIGHT COLUMN: Fixed width Dashboard for engineering stats */}
+              <div className="w-full lg:w-[450px]">
+                <ArchitecturePanel />
+              </div>
 
             </div>
           </div>

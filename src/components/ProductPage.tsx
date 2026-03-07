@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Loader2, ShoppingBag, AlertCircle, CheckCircle2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-// 🎯 IMPORT THE SINGLETON: This ensures 1 tab = 1 socket connection
 import { socket } from '../socket'; 
 
 const ProductPage: React.FC = () => {
@@ -15,45 +14,34 @@ const ProductPage: React.FC = () => {
   const PRODUCT_ID = 'bea869fb-e8fe-4d54-bb13-b6c247663380'; 
   const sneakerImage = "https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Limited%20edition%20sneaker%2C%20futuristic%20design%2C%20neon%20orange%20accents%2C%20high%20quality%20product%20photography%2C%20white%20background&image_size=square_hd";
 
-  /**
-   * 🔄 Initial Fetch for SSR/Refresh stability
-   */
   const fetchStock = async () => {
     try {
       const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
       const response = await fetch(`${apiUrl}/api/stock/${PRODUCT_ID}?t=${Date.now()}`);
-      if (!response.ok) throw new Error("Network response was not ok");
       const data = await response.json();
       const currentStock = data.remainingStock ?? data.stock;
       setStock(currentStock !== undefined ? Number(currentStock) : 0);
     } catch (err) {
-      console.error("❌ Failed to fetch initial stock:", err);
       setStock(0); 
     }
   };
 
   useEffect(() => {
-    // 1. Persistent User ID Logic
     let storedUserId = localStorage.getItem('flash_sale_user_id');
     if (!storedUserId) {
       storedUserId = `user_${Math.random().toString(36).substr(2, 9)}`;
       localStorage.setItem('flash_sale_user_id', storedUserId);
     }
 
-    // 2. Handle Room Joining
-    // If socket is already connected (from ArchitecturePanel), join immediately
     if (socket.connected) {
       socket.emit('join', storedUserId);
     }
 
-    // 3. LISTENERS: We use the shared 'socket' instance here
     const onConnect = () => {
-      console.log('✅ Connected to Shared Socket as:', storedUserId);
       socket.emit('join', storedUserId);
     };
 
     const onOrderConfirmed = (data: any) => {
-      console.log("🔥 SUCCESS! Socket received order confirmation.");
       setStock(data.remainingStock);
       setPurchaseSuccess(true);
       setShowPopup(true);
@@ -62,16 +50,14 @@ const ProductPage: React.FC = () => {
     };
 
     const onStockUpdate = (data: any) => {
-      console.log("📢 Global sync: Stock updated to", data.stock);
       setStock(data.stock);
-      setLoading(false); // Stop any local spinners if a global update happens
+      setLoading(false); 
     };
 
     const onSaleStatusChange = (data: any) => {
       if (data.status === 'closed') navigate('/waiting-room');
     };
 
-    // Attach listeners
     socket.on('connect', onConnect);
     socket.on('order_confirmed', onOrderConfirmed);
     socket.on('stock-update', onStockUpdate);
@@ -79,7 +65,6 @@ const ProductPage: React.FC = () => {
 
     fetchStock();
 
-    // 4. CLEANUP: Only remove listeners, DO NOT .disconnect() the shared socket!
     return () => { 
       socket.off('connect', onConnect);
       socket.off('order_confirmed', onOrderConfirmed);
@@ -93,12 +78,6 @@ const ProductPage: React.FC = () => {
     setLoading(true);
     setError(null);
 
-    // Spinner Safety Timeout (10s)
-    const spinnerGuard = setTimeout(() => {
-      setLoading(false);
-      setError("Request taking too long. Check stock.");
-    }, 10000);
-
     try {
       const userId = localStorage.getItem('flash_sale_user_id');
       const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/buy`, {
@@ -111,79 +90,117 @@ const ProductPage: React.FC = () => {
       });
 
       if (!response.ok) {
-        clearTimeout(spinnerGuard);
         setLoading(false);
         if (response.status === 429) {
           setError("Whoa! Too fast. Please wait 5s. ⏱️");
+          // 🎯 Added: Error disappears after 5 seconds
+          setTimeout(() => setError(null), 5000);
         } else {
           setError("Buy request failed.");
+          // Also clear standard errors for a clean UI
+          setTimeout(() => setError(null), 5000);
         }
       }
     } catch (err) {
-      clearTimeout(spinnerGuard);
       setLoading(false);
       setError("Network error.");
+      setTimeout(() => setError(null), 5000);
     }
   };
 
   return (
-    <div className="min-h-screen bg-zinc-50 flex items-center justify-center p-4 font-sans text-zinc-900">
-      <div className="bg-white rounded-3xl shadow-xl overflow-hidden max-w-4xl w-full grid md:grid-cols-2 relative">
-        
-        {/* 🏆 Secured Popup Overlay */}
-        {showPopup && (
-          <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm">
-            <div className="bg-white p-8 rounded-2xl shadow-2xl text-center relative max-w-sm mx-4 animate-in zoom-in-95 duration-300">
-              <button onClick={() => setShowPopup(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600"><X size={20} /></button>
-              <CheckCircle2 className="mx-auto mb-4 text-green-600" size={48} />
-              <h3 className="text-2xl font-bold mb-2">Secured!</h3>
-              <p className="text-zinc-500 mb-6">Your Neon Runner X is on the way. Check your email for details.</p>
-              <button onClick={() => setShowPopup(false)} className="w-full py-3 bg-zinc-900 text-white rounded-xl font-medium hover:bg-zinc-800 transition-colors">Awesome!</button>
+    <div className="h-full w-full flex flex-col md:grid md:grid-cols-[1.1fr_0.9fr] relative">
+      
+      {showPopup && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-md">
+          <div className="bg-white p-8 rounded-3xl shadow-2xl text-center relative max-w-sm mx-4 animate-in zoom-in-95 duration-300">
+            <button onClick={() => setShowPopup(false)} className="absolute top-4 right-4 text-zinc-400 hover:text-zinc-600"><X size={24} /></button>
+            <CheckCircle2 className="mx-auto mb-4 text-green-600" size={56} />
+            <h3 className="text-2xl font-bold mb-2">Secured!</h3>
+            <p className="text-zinc-500 mb-6 text-base leading-tight">Your Neon Runner X is on the way. Check your email for details.</p>
+            <button onClick={() => setShowPopup(false)} className="w-full py-4 bg-zinc-900 text-white rounded-2xl font-bold text-lg hover:bg-zinc-800 transition-all shadow-xl active:scale-95">Awesome!</button>
+          </div>
+        </div>
+      )}
+
+      {/* LEFT SIDE: Image Container */}
+      <div className="relative bg-[#f8f8f8] flex items-center justify-center p-8 group">
+        <div className="absolute top-4 left-6">
+          <span className="bg-black text-white text-[9px] font-black uppercase tracking-[0.2em] px-2.5 py-1 rounded-full">Limited Drop</span>
+        </div>
+        <img 
+          src={sneakerImage} 
+          alt="Sneaker" 
+          className="w-full h-auto max-w-[420px] drop-shadow-[0_25px_25px_rgba(0,0,0,0.12)] transition-transform duration-700 group-hover:scale-105" 
+        />
+      </div>
+
+      {/* RIGHT SIDE: Details & Controls */}
+      <div className="p-8 md:p-12 flex flex-col justify-start gap-8 border-l border-gray-50">
+        <div className="space-y-6">
+          <div>
+            <h1 className="text-4xl md:text-5xl font-black mb-1 tracking-tight leading-none">Neon Runner X</h1>
+            <p className="text-orange-500 font-bold tracking-widest uppercase text-xs">By FutureKicks</p>
+          </div>
+          
+          <p className="text-zinc-500 leading-relaxed text-base md:text-lg">
+            The future of high-concurrency footwear. Built with adaptive cushioning and a breathable mesh upper, this limited drop is engineered to handle the massive load of any flash sale without missing a step.
+          </p>
+          
+          <div className={`p-6 rounded-2xl border-2 transition-all ${stock === 0 ? 'bg-red-50 border-red-100' : 'bg-orange-50 border-orange-100'}`}>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`p-3 rounded-xl ${stock === 0 ? 'bg-red-500 text-white' : 'bg-orange-500 text-white'}`}>
+                  <ShoppingBag size={28} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Inventory Status</p>
+                  <p className={`text-3xl font-black leading-none ${stock === 0 ? 'text-red-600' : 'text-zinc-900'}`}>
+                    {stock !== null ? `${stock} / 100` : 'SYNCING...'}
+                  </p>
+                </div>
+              </div>
+              {stock !== null && stock > 0 && (
+                <span className="flex h-3 w-3 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-orange-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-orange-500"></span>
+                </span>
+              )}
             </div>
           </div>
-        )}
-
-        {/* Hero Image Section */}
-        <div className="relative bg-zinc-100 flex items-center justify-center p-8 group overflow-hidden">
-          <img src={sneakerImage} alt="Sneaker" className="w-full drop-shadow-2xl transition-transform duration-500 group-hover:scale-105" />
         </div>
 
-        {/* Product Info Section */}
-        <div className="p-8 md:p-12 flex flex-col justify-between">
-          <div>
-            <h1 className="text-3xl md:text-4xl font-extrabold mb-2">Neon Runner X</h1>
-            <p className="text-zinc-500 mb-6 font-medium">By FutureKicks</p>
-            <p className="text-zinc-600 leading-relaxed mb-8">
-              The future of high-concurrency footwear. Built with adaptive cushioning and a breathable mesh upper.
-            </p>
-            
-            <div className="flex items-center gap-3 mb-8 p-4 bg-zinc-50 rounded-xl border border-zinc-100">
-              <ShoppingBag className={stock === 0 ? 'text-red-600' : 'text-orange-500'} size={24} />
-              <div>
-                <p className="text-sm text-zinc-500 uppercase font-bold tracking-tight">Stock Remaining</p>
-                <p className={`text-2xl font-bold ${stock === 0 ? 'text-red-600' : 'text-zinc-900'}`}>
-                  {stock !== null ? `${stock} / 100` : 'Loading...'}
-                </p>
-              </div>
+        <div className="space-y-4">
+          {error && (
+            <div className="flex items-center gap-3 text-red-600 bg-red-50 p-4 rounded-xl text-sm font-bold border border-red-100">
+              <AlertCircle size={20} />
+              {error}
             </div>
-          </div>
+          )}
 
-          <div className="space-y-4">
-            {error && (
-              <div className="flex items-center gap-2 text-red-600 bg-red-50 p-3 rounded-lg text-sm">
-                <AlertCircle size={16} />
-                {error}
-              </div>
+          <button
+            onClick={handleBuy}
+            disabled={loading || stock === 0}
+            className={`group w-full py-6 rounded-2xl font-black text-xl flex items-center justify-center gap-3 transition-all active:scale-[0.96] shadow-xl ${
+              stock === 0 
+              ? 'bg-zinc-200 text-zinc-400 cursor-not-allowed shadow-none' 
+              : 'bg-[#FF6B35] text-white hover:bg-[#e85a24] hover:shadow-orange-200'
+            }`}
+          >
+            {loading ? (
+              <><Loader2 className="animate-spin" size={28} /> QUEUING...</>
+            ) : stock === 0 ? (
+              "OUT OF STOCK"
+            ) : (
+              <>BUY NOW — $199 <span className="text-orange-200 group-hover:translate-x-1 transition-transform">→</span></>
             )}
+          </button>
 
-            <button
-              onClick={handleBuy}
-              disabled={loading || stock === 0}
-              className={`w-full py-4 rounded-xl font-bold text-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98] ${stock === 0 ? 'bg-zinc-200 text-zinc-400' : 'bg-[#FF6B35] text-white shadow-lg hover:bg-orange-600'}`}
-            >
-              {loading ? <><Loader2 className="animate-spin" size={24} />Processing...</> : stock === 0 ? "Sold Out" : "Buy Now - $199"}
-            </button>
-          </div>
+          {purchaseSuccess && !showPopup && (
+            <div className="flex items-center justify-center gap-2 text-green-600 font-bold text-xs uppercase tracking-widest">
+              <CheckCircle2 size={16} /> Order Successfully Queued
+            </div>
+          )}
         </div>
       </div>
     </div>
