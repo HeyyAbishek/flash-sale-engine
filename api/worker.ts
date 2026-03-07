@@ -3,27 +3,24 @@ import redis from './redis.js';
 import * as stockService from './services/stockService.js';
 import { Redis } from "ioredis";
 
-// --- 1. THE EXPORT (This fixes the red underline in socket.ts) ---
+// --- 1. THE EXPORT ---
 export const orderQueue = new Queue('order-queue', {
-  connection: redis.duplicate(), // BullMQ needs its own connection
+  connection: redis.duplicate(),
 });
 
-console.log('🚀 BullMQ Worker started, listening for purchase requests...');
+console.log('🚀 BullMQ Worker: 40s Ultra-Quiet Mode Active');
 
 // --- 2. THE PROCESSING LOGIC ---
 const worker = new Worker(
   'order-queue', 
   async (job) => {
     const { productId, userId } = job.data;
-    console.log(`📦 Processing purchase for user ${userId} | Product: ${productId}`);
+    console.log(`📦 Processing purchase for user ${userId}`);
 
     try {
       const purchaseResult = await stockService.purchaseItem(productId);
 
       if (purchaseResult.success) {
-        console.log(`✅ Success for user ${userId}. Remaining: ${purchaseResult.remainingStock}`);
-
-        // Notify the user via Socket.io bridge
         await redis.publish('worker_notifications', JSON.stringify({
           userId,
           type: 'order_confirmed',
@@ -31,11 +28,10 @@ const worker = new Worker(
             success: true,
             productId,
             remainingStock: purchaseResult.remainingStock,
-            message: "You got it! Order confirmed."
+            message: "Order confirmed!"
           }
         }));
       } else {
-        console.log(`❌ Failed for user ${userId}: ${purchaseResult.message}`);
         await redis.publish('worker_notifications', JSON.stringify({
           userId,
           type: 'order_failed',
@@ -46,19 +42,24 @@ const worker = new Worker(
         }));
       }
     } catch (dbError) {
-      console.error(`🚨 Database error for user ${userId}:`, dbError);
-      // If a DB error happens, BullMQ can automatically retry the job!
+      console.error(`🚨 Database error:`, dbError);
       throw dbError; 
     }
   }, 
   { 
     connection: redis.duplicate(),
-    concurrency: 5 // Process 5 orders at once (adjust based on your DB strength)
+    concurrency: 5,
+    // 🎯 ULTRA-QUIET SETTINGS (40 Seconds)
+    stalledInterval: 40000, // Checks for crashed jobs every 40s
+    lockDuration: 60000,    // Keep the lock for 60s
+    maxStalledCount: 1,     // Don't waste commands on repeat retries
   }
 );
 
-// --- 3. WORKER SYNC LISTENER (For Restocks) ---
+// --- 3. WORKER SYNC LISTENER ---
 const sub = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+sub.on('error', (err) => console.log('Redis Sub Error:', err.message));
+
 sub.subscribe('worker_notifications');
 sub.on('message', (channel, message) => {
   if (channel === 'worker_notifications') {
