@@ -6,12 +6,9 @@ dotenv.config();
 
 // The "Connector"
 // We create one shared connection to be used by the Worker and the API.
-// The 'tls' block is CRITICAL for Upstash.
+// 🎯 Removed the 'tls' block because Redis Cloud Free Tier uses standard connections.
 const redis = new Redis(process.env.REDIS_URL as string, {
-  tls: {
-    rejectUnauthorized: false
-  },
-  maxRetriesPerRequest: null 
+  maxRetriesPerRequest: null // BullMQ requires this!
 });
 
 export default redis;
