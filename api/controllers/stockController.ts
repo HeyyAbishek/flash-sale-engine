@@ -1,10 +1,9 @@
 import { type Request, type Response } from 'express';
-// Note: Adjust imports if your file structure is different (e.g. ../db/index.js)
 import pool from '../db.js';
 import { getIo } from '../socket.js';
 import * as stockService from '../services/stockService.js';
 import redis from '../redis.js';
-import { randomUUID } from 'crypto';
+import { orderQueue } from '../worker.js'; // 🎯 The fix starts here
 
 // --- Existing Get Stock ---
 export const getStock = async (req: Request, res: Response) => {
@@ -19,7 +18,7 @@ export const getStock = async (req: Request, res: Response) => {
   }
 };
 
-// --- OPTIMIZED PURCHASE (Fire and Forget) ---
+// --- 🚀 OPTIMIZED PURCHASE (Now with BullMQ Telemetry) ---
 export const purchase = async (req: Request, res: Response) => {
   try {
     const { productId, userId } = req.body;
@@ -62,80 +61,65 @@ export const purchase = async (req: Request, res: Response) => {
     }
     await redis.set(rateLimitKey, '1', 'EX', 5);
 
-    // 4. THE FIX: Just Queue and Return! 🚀
-    // Do NOT wait for database (stockService.getStock) here.
-    const job = { userId: uid, productId: productId || "sneaker-001" };
-    await redis.lpush('buy_queue', JSON.stringify(job));
+    // 4. THE FIX: Using BullMQ instead of raw LPUSH 🚀
+    // This allows our Telemetry dashboard to actually "see" the jobs
+    await orderQueue.add(
+      'purchase-job', 
+      { 
+        userId: uid, 
+        productId: productId || "sneaker-001" 
+      },
+      {
+        removeOnComplete: true, // Keep Redis memory clean
+        attempts: 3,            // Retry if DB locks during high traffic
+        backoff: 1000           // Wait 1s before retrying
+      }
+    );
     
-    // Respond immediately!
-    res.json({
+    // Respond immediately to the user
+    res.status(202).json({
       success: true,
       message: 'Order Queued!',
-      // Frontend should rely on WebSocket for the actual number, not this response
     });
 
   } catch (error) {
-    console.error('Redis error:', error);
+    console.error('Queue error:', error);
     res.status(500).json({ success: false, message: "Error queuing request" });
   }
 };
 
-// --- Existing Restock ---
+// --- Existing Restock / Admin Functions ---
 export const restock = async (req: Request, res: Response) => {
   try {
     const { productId, amount } = req.body;
     const targetId = productId || 'sneaker-001';
     const newStock = amount || 100;
-
     await pool.query('UPDATE products SET stock_quantity = $1 WHERE id = $2', [newStock, targetId]);
-
     try {
       const io = getIo();
       io.emit('stock-update', { productId: targetId, stock: newStock });
     } catch (e) {
       console.warn("Socket notification failed:", e);
     }
-
     res.json({ success: true, message: `Stock reset to ${newStock}` });
   } catch (error) {
-    console.error('Restock failed:', error);
     res.status(500).json({ success: false, error: 'Failed to restock' });
   }
 };
 
-// GET /api/status
 export const getSaleStatus = async (req: Request, res: Response) => {
-  try {
-    // 🛑 CHANGE: Default to 'open' so new users see the product immediately
-    const status = await redis.get('sale_status') || 'open';
-    res.json({ status });
-  } catch (error) {
-    console.error('Status check failed:', error);
-    // Fallback to open so the site doesn't break
-    res.status(500).json({ status: 'open' });
-  }
+  const status = await redis.get('sale_status') || 'open';
+  res.json({ status });
 };
 
-// POST /api/admin/open (The "God Mode" Switch)
 export const openSale = async (req: Request, res: Response) => {
-  try {
-    // 1. Set status to OPEN in Redis
-    await redis.set('sale_status', 'open');
-    
-    // 2. Scream it to everyone connected via WebSocket
-    const io = getIo();
-    io.emit('sale-status-change', { status: 'open' }); // <-- This triggers the redirect!
-    
-    res.json({ success: true, message: 'THE GATES ARE OPEN! 🚀' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to open sale' });
-  }
+  await redis.set('sale_status', 'open');
+  getIo().emit('sale-status-change', { status: 'open' });
+  res.json({ success: true, message: 'THE GATES ARE OPEN! 🚀' });
 };
 
-// POST /api/admin/close (Reset)
 export const closeSale = async (req: Request, res: Response) => {
   await redis.set('sale_status', 'closed');
-  const io = getIo();
-  io.emit('sale-status-change', { status: 'closed' });
+  getIo().emit('sale-status-change', { status: 'closed' });
   res.json({ success: true, message: 'Sale closed.' });
 };

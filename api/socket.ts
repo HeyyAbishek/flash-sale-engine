@@ -1,33 +1,51 @@
 import { Server } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
-import redis from './redis.js'; // Using your existing redis import
-import { Redis } from "ioredis";
-
-// --- 1. REDIS ADAPTER SETUP (For Multi-Server Scaling) ---
-const pubClient = redis.duplicate();
-const subClient = redis.duplicate();
+import redis from './redis.js'; 
+import { orderQueue } from './worker.js'; // Ensure this matches your worker's exported queue
 
 let io: Server;
 
 export const initSocket = (httpServer: any) => {
-  // --- 2. INITIALIZE SERVER WITH SECURE CORS ---
+  // --- 1. INITIALIZE SERVER WITH EXPLICIT CORS & TRANSPORTS ---
   io = new Server(httpServer, {
     cors: {
-      origin: true, // Dynamically allows your Vercel/Render frontend
+      origin: "http://localhost:5173", // Hardcoded for Vite local dev
       credentials: true,
       methods: ["GET", "POST"]
-    }
+    },
+    transports: ['polling', 'websocket'] // Force polling first for stability
   });
 
-  // 🚨 THE SCALING FIX: Attach the Redis Adapter
-  io.adapter(createAdapter(pubClient, subClient));
+  // --- 2. REDIS ADAPTER ---
+  io.adapter(createAdapter(redis.duplicate(), redis.duplicate()));
 
+  // --- 3. THE TELEMETRY HEARTBEAT (With Debug Log) ---
+  setInterval(async () => {
+    if (io) {
+      try {
+        const counts = await orderQueue.getJobCounts('wait', 'active');
+        const userCount = io.engine.clientsCount;
+
+        // 🕵️‍♂️ Debug Log to confirm backend is actually pulsing
+        console.log(`📡 TELEMETRY: Users: ${userCount} | Queue: ${counts.wait + counts.active} | DB: ${counts.active > 0 ? 'Writing' : 'Idle'}`);
+
+        io.emit('system-telemetry', {
+          activeUsers: userCount,
+          queueLength: counts.wait + counts.active,
+          dbStatus: counts.active > 0 ? "Writing..." : "Idle"
+        });
+      } catch (err) {
+        console.error("Telemetry Error:", err);
+      }
+    }
+  }, 1000);
+
+  // --- 4. CONNECTION LOGIC ---
   io.on('connection', (socket) => {
     console.log('✅ Socket Connection Established:', socket.id);
 
     socket.on('join', (userId) => {
       if (userId) {
-        console.log(`👤 User ${userId} joined room`);
         socket.join(userId);
       }
     });
@@ -37,7 +55,7 @@ export const initSocket = (httpServer: any) => {
     });
   });
 
-  // --- 3. 🛠️ THE WORKER BRIDGE (Direct Messaging & Global Sync) ---
+  // --- 5. WORKER BRIDGE (UNTOUCHED) ---
   const workerListener = redis.duplicate();
   workerListener.subscribe('worker_notifications');
 
@@ -47,18 +65,14 @@ export const initSocket = (httpServer: any) => {
       const { userId, type, payload } = data;
       
       if (io) {
-        // 🎯 Direct Message to the Buyer (Stops the blue spinner)
         if (userId) {
           console.log(`👤 DM to User ${userId}: ${type}`);
           io.to(userId).emit(type, payload);
         }
 
-        // 📢 GLOBAL BROADCAST (Syncs stock for all users)
         if (type === 'order_confirmed' || type === 'stock-update') {
           const newStock = payload.remainingStock ?? payload.stock;
           console.log(`📢 GLOBAL BROADCAST: Stock is now ${newStock}`);
-          
-          // Emit 'stock-update' to match ProductPage.tsx listener
           io.emit('stock-update', { stock: newStock });
         }
       }

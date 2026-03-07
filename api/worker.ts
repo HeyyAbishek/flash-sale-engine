@@ -1,85 +1,64 @@
-import redis from './redis';   
+import { Queue, Worker } from 'bullmq';
+import redis from './redis.js'; 
 import * as stockService from './services/stockService.js';
 import { Redis } from "ioredis";
 
-console.log('Worker started, listening for purchase requests...');
+// --- 1. THE EXPORT (This fixes the red underline in socket.ts) ---
+export const orderQueue = new Queue('order-queue', {
+  connection: redis.duplicate(), // BullMQ needs its own connection
+});
 
-/**
- * processQueue now returns a Promise so we can await it 
- * in our high-speed while loop.
- */
-const processQueue = async () => {
-  try {
-    // brpop blocks until a job is available
-    const result = await redis.brpop('buy_queue', 0);
-    
-    if (result) {
-      const [key, value] = result;
-      const job = JSON.parse(value);
-      const { productId, userId } = job;
-      
-      console.log(`Processing purchase for user ${userId} product ${productId}`);
-      
-      try {
-        const purchaseResult = await stockService.purchaseItem(productId);
-        
-        if (purchaseResult.success) {
-          console.log(`Purchase successful for user ${userId}. Remaining: ${purchaseResult.remainingStock}`);
-          
-          await redis.publish('worker_notifications', JSON.stringify({
-            userId,
-            type: 'order_confirmed',
-            payload: {
-              success: true,
-              productId,
-              remainingStock: purchaseResult.remainingStock,
-              message: "You got it! Order confirmed."
-            }
-          }));
-          
-        } else {
-          console.log(`Purchase failed for user ${userId}: ${purchaseResult.message}`);
-          await redis.publish('worker_notifications', JSON.stringify({
-            userId,
-            type: 'order_failed',
-            payload: {
-              success: false,
-              message: purchaseResult.message || "Order Failed"
-            }
-          }));
-        }
-      } catch (dbError) {
-        console.error(`Database error processing purchase for user ${userId}:`, dbError);
+console.log('🚀 BullMQ Worker started, listening for purchase requests...');
+
+// --- 2. THE PROCESSING LOGIC ---
+const worker = new Worker(
+  'order-queue', 
+  async (job) => {
+    const { productId, userId } = job.data;
+    console.log(`📦 Processing purchase for user ${userId} | Product: ${productId}`);
+
+    try {
+      const purchaseResult = await stockService.purchaseItem(productId);
+
+      if (purchaseResult.success) {
+        console.log(`✅ Success for user ${userId}. Remaining: ${purchaseResult.remainingStock}`);
+
+        // Notify the user via Socket.io bridge
+        await redis.publish('worker_notifications', JSON.stringify({
+          userId,
+          type: 'order_confirmed',
+          payload: {
+            success: true,
+            productId,
+            remainingStock: purchaseResult.remainingStock,
+            message: "You got it! Order confirmed."
+          }
+        }));
+      } else {
+        console.log(`❌ Failed for user ${userId}: ${purchaseResult.message}`);
         await redis.publish('worker_notifications', JSON.stringify({
           userId,
           type: 'order_failed',
           payload: {
             success: false,
-            message: "System error processing order"
+            message: purchaseResult.message || "Order Failed"
           }
         }));
       }
+    } catch (dbError) {
+      console.error(`🚨 Database error for user ${userId}:`, dbError);
+      // If a DB error happens, BullMQ can automatically retry the job!
+      throw dbError; 
     }
-  } catch (error) {
-    console.error('Error processing job:', error);
-    // Short sleep on error to prevent CPU spiking if Redis is down
-    await new Promise(resolve => setTimeout(resolve, 1000));
+  }, 
+  { 
+    connection: redis.duplicate(),
+    concurrency: 5 // Process 5 orders at once (adjust based on your DB strength)
   }
-};
+);
 
-// --- 🚨 HIGH-SPEED PRODUCTION LOOP ---
-// This replaces setImmediate for maximum throughput on Render/Vercel
-const startWorker = async () => {
-  console.log("🚀 High-speed loop active.");
-  while (true) {
-    await processQueue();
-  }
-};
-
-startWorker();
-
-// --- WORKER SYNC LISTENER (For Restocks) ---
-const sub = new Redis(process.env.REDIS_URL);
+// --- 3. WORKER SYNC LISTENER (For Restocks) ---
+const sub = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
 sub.subscribe('worker_notifications');
 sub.on('message', (channel, message) => {
   if (channel === 'worker_notifications') {
@@ -89,3 +68,5 @@ sub.on('message', (channel, message) => {
     }
   }
 });
+
+export default worker;

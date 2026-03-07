@@ -1,6 +1,7 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import ProductPage from "./components/ProductPage";
 import WaitingRoom from "./components/WaitingRoom";
+import ArchitecturePanel from "./components/ArchitecturePanel"; // Added import
 import toast, { Toaster } from 'react-hot-toast';
 
 function AdminPanel() {
@@ -78,7 +79,21 @@ export default function App() {
         }}
       />
       <Routes>
-        <Route path="/" element={<ProductPage />} />
+        <Route path="/" element={
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <div className="max-w-6xl w-full flex flex-col lg:flex-row gap-8 items-start justify-center">
+              
+              {/* LEFT COLUMN: Your existing Shoe UI goes here */}
+              <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
+                <ProductPage />
+              </div>
+
+              {/* RIGHT COLUMN: The new Engineering Dashboard */}
+              <ArchitecturePanel />
+
+            </div>
+          </div>
+        } />
         <Route path="/waiting-room" element={<WaitingRoom />} />
       </Routes>
       <AdminPanel />
