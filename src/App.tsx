@@ -78,16 +78,16 @@ export default function App() {
       <Routes>
         <Route path="/" element={
           <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-            {/* Main Container expanded to 7xl to allow width for the wider shoe card */}
-            <div className="max-w-7xl w-full flex flex-col lg:flex-row gap-8 items-stretch justify-center">
+            {/* 🎯 Changed lg:flex-row to md:flex-row and lg:w to md:w */}
+            <div className="max-w-7xl w-full flex flex-col md:flex-row gap-8 items-stretch justify-center">
               
-              {/* LEFT COLUMN: Now using flex-1 to occupy all available space */}
+              {/* LEFT COLUMN: Expanded Shoe UI */}
               <div className="flex-1 bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100">
                 <ProductPage />
               </div>
 
-              {/* RIGHT COLUMN: Fixed width Dashboard for engineering stats */}
-              <div className="w-full lg:w-[450px]">
+              {/* RIGHT COLUMN: Dashboard - Width set for medium screens and up */}
+              <div className="w-full md:w-[400px]">
                 <ArchitecturePanel />
               </div>
 
