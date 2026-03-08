@@ -6,9 +6,13 @@ import { Redis } from "ioredis";
 // --- 1. THE EXPORT ---
 export const orderQueue = new Queue('order-queue', {
   connection: redis.duplicate(),
+  defaultJobOptions: {
+    removeOnComplete: true, // 🎯 Instantly deletes the job from Redis when done (Saves 30MB Limit)
+    removeOnFail: 100       // Only keeps the last 100 failed jobs for debugging
+  }
 });
 
-console.log('🚀 BullMQ Worker: 5-Minute Ultra-Quiet Mode Active');
+console.log('🚀 BullMQ Worker: Max Speed & Auto-Cleanup Active');
 
 // --- 2. THE PROCESSING LOGIC ---
 const worker = new Worker(
@@ -49,17 +53,11 @@ const worker = new Worker(
   { 
     connection: redis.duplicate(),
     concurrency: 5,
-    // 🎯 MAXIMUM COMMAND SAVINGS (5 Minutes)
-    // This only affects how long we wait to retry a CRASHED job.
-    // It has NO effect on the speed of a normal purchase.
-    stalledInterval: 300000, // 5 minutes (300,000ms)
-    lockDuration: 360000,    // Lock duration must be slightly longer than the interval
-    maxStalledCount: 1,      
+    // 🎯 Ultra-quiet mode removed! Back to default, lightning-fast background polling.
   }
 );
 
 // --- 3. WORKER SYNC LISTENER ---
-// 🎯 Added a .replace() here to strip any accidental quotes from Render!
 const redisUrl = (process.env.REDIS_URL || 'redis://localhost:6379').replace(/"/g, '');
 const sub = new Redis(redisUrl);
 
