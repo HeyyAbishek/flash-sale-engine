@@ -5,12 +5,10 @@ import http from 'http';
 const PORT = process.env.PORT || 3001;
 const HOST = '0.0.0.0'; 
 
-// --- 🎯 THE NEON PROTECTOR ROUTE ---
-// Add this before initializing sockets to ensure it's high priority
-app.get('/health', (req, res) => {
-  // This keeps Render & BullMQ awake WITHOUT waking up Neon.
-  res.status(200).send('Engine is Purring');
-});
+/**
+ * 🎯 NOTE: The /health route is now in app.ts for better 
+ * route priority and to protect Neon compute hours.
+ */
 
 // Create the HTTP server using the imported Express app
 const server = http.createServer(app);
