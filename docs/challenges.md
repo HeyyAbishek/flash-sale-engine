@@ -1,4 +1,4 @@
-# 💥 Technical Challenges & Solutions
+# 💥Technical Challenges & Solutions
 
 Handling flash sales presents unique engineering challenges due to extreme concurrency and the potential for severe data inconsistencies. This document outlines the key problems encountered and their robust solutions.
 
