@@ -6,8 +6,8 @@ import { fileURLToPath } from 'url';
 import authRoutes from './routes/auth.js';
 import stockRoutes from './routes/stock.js';
 import { restockItem } from './services/stockService.js';
-import { getIo } from './socket.js'; // Import the socket getter
-import redis from './redis.js'; // Ensure you import your redis instance
+import { getIo } from './socket.js'; 
+import redis from './redis.js'; 
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -16,12 +16,21 @@ dotenv.config();
 
 const app: express.Application = express();
 
-// Track sale status (In production, this should be in Redis/DB)
+// --- 🎯 THE NEON PROTECTOR (FIRST PRIORITY) ---
+/**
+ * This keeps Render & BullMQ awake WITHOUT waking up Neon.
+ * This MUST be before any other routes or middleware.
+ */
+app.get('/health', (req: Request, res: Response) => {
+  res.status(200).send('Engine is Purring');
+});
+
+// Track sale status
 let saleStatus = 'open'; 
 
 // 1. Updated CORS for Production Stability
 app.use(cors({
-  origin: true, // Dynamically allows your Vercel/Render frontend
+  origin: true, 
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Idempotency-Key', 'X-Requested-With']
@@ -30,23 +39,17 @@ app.use(cors({
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// 2. Base Health Check
+// 2. Base Health Check (Optional, but kept for legacy)
 app.get('/', (req: Request, res: Response) => {
   res.status(200).send('Server is awake! 🚀');
 });
 
 // --- 🛠️ ADMIN & STATUS ROUTES ---
 
-/**
- * Get current sale status (Open/Closed)
- */
 app.get('/api/status', (req: Request, res: Response) => {
   res.json({ status: saleStatus });
 });
 
-/**
- * Toggle Sale Status (Admin)
- */
 app.post('/api/admin/sale', (req: Request, res: Response) => {
   const { status } = req.body;
   saleStatus = status;
@@ -60,27 +63,19 @@ app.post('/api/admin/sale', (req: Request, res: Response) => {
   res.json({ success: true, status });
 });
 
-/**
- * Restock Route (Updated for High-Concurrency)
- * This handles local socket broadcast AND global Redis sync
- */
 app.post('/api/restock', async (req: Request, res: Response) => {
   const { productId, amount } = req.body;
   const newStockLevel = amount || 100;
   
   try {
-    // 1. Update the actual Database/Redis stock
     await restockItem(productId, newStockLevel);
     
-    // 2. Local Broadcast (for users on THIS server instance)
     const io = getIo(); 
     if (io) {
       console.log(`📡 Shouting stock update: ${newStockLevel}`);
       io.emit('stock-update', { stock: newStockLevel }); 
     }
 
-    // 3. 🚨 THE GLOBAL SYNC: Publish to Redis
-    // This ensures your Worker and other API instances see the restock
     await redis.publish('worker_notifications', JSON.stringify({
       type: 'stock-update',
       payload: { stock: newStockLevel }
@@ -96,10 +91,6 @@ app.post('/api/restock', async (req: Request, res: Response) => {
 // --- Standard API Routes ---
 app.use('/api/auth', authRoutes);
 app.use('/api', stockRoutes);
-
-app.get('/api/health', (req: Request, res: Response) => {
-  res.status(200).send('ok'); // Minimal response for cron jobs
-});
 
 // --- Error Handling ---
 app.use((error: Error, req: Request, res: Response, next: NextFunction) => {
