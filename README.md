@@ -6,15 +6,19 @@
 
 **Flash Sale Engine** is a production-grade backend system designed to handle extreme traffic spikes during limited-inventory drops. It solves the "Double Booking" problem using **Postgres Row-Level Locking**, **Redis Queues**, and **WebSockets**.
 
+<img width="1919" height="1021" alt="Screenshot 2026-03-09 004514" src="https://github.com/user-attachments/assets/5a0b5355-a81f-4ce8-933d-305f73b08cb3" />
 
-<img width="1920" height="970" alt="Screenshot 2026-02-19 003827" src="https://github.com/user-attachments/assets/f242ee6a-bed5-42fc-a79b-41865435777e" />
 
 
 ## 🚀 Live Demo
 
 
+https://github.com/user-attachments/assets/f04bbc7d-021c-4757-b223-1a69ff2d48e9
 
-https://github.com/user-attachments/assets/326b92e5-c6cc-4401-979c-5439b72ca637
+
+
+
+
 
 
 
