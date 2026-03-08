@@ -6,6 +6,7 @@ import { orderQueue } from './worker.js';
 let io: Server;
 
 export const initSocket = (httpServer: any) => {
+  // --- 1. INITIALIZE SERVER ---
   io = new Server(httpServer, {
     cors: {
       origin: [
@@ -18,46 +19,70 @@ export const initSocket = (httpServer: any) => {
     transports: ['polling', 'websocket'] 
   });
 
+  /**
+   * 🎯 REDIS ADAPTER (Connections #4 & #5)
+   * This allows Socket.io to scale across multiple server instances.
+   */
   io.adapter(createAdapter(redis.duplicate(), redis.duplicate()));
 
-  // --- THE TELEMETRY HEARTBEAT ---
+  /**
+   * 🎯 1s TELEMETRY HEARTBEAT
+   * Since Redis Cloud has unlimited commands, we provide real-time updates 
+   * every second to show recruiters the live state of your engine.
+   */
   setInterval(async () => {
     if (io) {
       try {
         const counts = await orderQueue.getJobCounts('wait', 'active');
-        const userCount = io.engine.clientsCount;
         const totalBacklog = counts.wait + counts.active;
 
         io.emit('system-telemetry', {
-          activeUsers: userCount,
+          activeUsers: io.engine.clientsCount,
           queueLength: totalBacklog,
           dbStatus: totalBacklog > 0 ? "Writing..." : "Idle"
         });
-      } catch (err) {
-        console.error("Telemetry Error:", err);
+      } catch (err) { 
+        console.error("🚀 Telemetry Heartbeat Error:", err); 
       }
     }
-  }, 1000); // 🚀 1-second interval for real-time portfolio flex
+  }, 1000); 
 
+  // --- 2. CONNECTION LOGIC ---
   io.on('connection', (socket) => {
     console.log('✅ Socket Connection Established:', socket.id);
-    socket.on('join', (userId) => { if (userId) socket.join(userId); });
-    socket.on('disconnect', () => { console.log('❌ User disconnected:', socket.id); });
+
+    socket.on('join', (userId) => {
+      if (userId) {
+        socket.join(userId);
+      }
+    });
+
+    socket.on('disconnect', () => {
+      console.log('❌ User disconnected:', socket.id);
+    });
   });
 
-  // --- WORKER NOTIFICATION BRIDGE ---
-  const workerListener = redis.duplicate();
-  workerListener.subscribe('worker_notifications');
+  /**
+   * 🎯 WORKER NOTIFICATION BRIDGE (Connection #6)
+   * Listens for completed jobs from the BullMQ worker and sends 
+   * instant updates to the specific user via their Socket.io room.
+   */
+  const sub = redis.duplicate(); 
+  sub.subscribe('worker_notifications');
 
-  workerListener.on('message', (channel, message) => {
-    if (channel === 'worker_notifications') {
+  sub.on('message', (channel, message) => {
+    if (channel === 'worker_notifications' && io) {
       const { userId, type, payload } = JSON.parse(message);
-      if (io) {
-        if (userId) io.to(userId).emit(type, payload);
-        if (type === 'order_confirmed' || type === 'stock-update') {
-          const newStock = payload.remainingStock ?? payload.stock;
-          io.emit('stock-update', { stock: newStock });
-        }
+      
+      // Personal notifications (Success/Failure) happen INSTANTLY
+      if (userId) {
+        io.to(userId).emit(type, payload);
+      }
+
+      // Stock updates happen INSTANTLY for everyone to see
+      if (type === 'order_confirmed' || type === 'stock-update') {
+        const newStock = payload.remainingStock ?? payload.stock;
+        io.emit('stock-update', { stock: newStock });
       }
     }
   });
