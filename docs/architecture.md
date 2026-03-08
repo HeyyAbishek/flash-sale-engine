@@ -15,7 +15,7 @@ This document details the architecture of the **High-Concurrency Flash Sale Engi
 
 ### **Database & Caching**
 - **PostgreSQL (Neon)**: Relational database with ACID compliance, utilizing **Row-Level Locking** (`SELECT ... FOR UPDATE`) to prevent race conditions.
-- **Redis (Upstash)**: High-performance in-memory data store used for:
+- **Redis (Redis Cloud)**: High-performance in-memory data store used for:
   - **Job Queue**: Buffering incoming purchase requests.
   - **Rate Limiting**: Preventing abuse and throttling traffic.
   - **Idempotency**: Ensuring unique request processing.
