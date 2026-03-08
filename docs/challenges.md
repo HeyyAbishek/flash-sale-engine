@@ -44,3 +44,19 @@ We utilize **Socket.io** for persistent, bidirectional communication.
 -   **Latency**: Updates reach the client in sub-50ms (network dependent), ensuring the UI reflects the true state of the inventory in near real-time.
 -   **Efficiency**: Eliminates the overhead of HTTP headers and connection establishment for every single status check.
 -   **Global State Management**: Allows instant broadcasting of "Sale Closed" or "Restock" events to all connected clients simultaneously.
+
+---
+
+
+## 4. Redis Cloud Migration (Command Scaling)
+### **The Problem**
+Serverless providers like Upstash enforce daily command limits (e.g., 10k/day). Our 1-second telemetry heartbeats would exhaust this limit in under 3 hours.
+### **The Solution**
+We migrated to **Redis Cloud** using a standard connection model. This allows for **unlimited commands** within our memory cap, sustaining real-time telemetry without fear of hitting a "command wall".
+
+---
+
+
+## 5. Free-Tier Resource Hardening
+- **Neon "Sleep" Protection**: Moved the `/health` route to the top of the stack. **UptimeRobot** pings this to keep Render awake while letting the **Neon** database sleep, preserving our **100-hour monthly compute limit**.
+- **Memory Safety**: Configured Node.js with `--max-old-space-size=450` to stay under Render's **512MB RAM limit** and used `removeOnComplete: true` to keep Redis under **30MB**.
