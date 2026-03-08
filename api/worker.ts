@@ -20,7 +20,13 @@ const worker = new Worker(
   'order-queue', 
   async (job) => {
     const { productId, userId } = job.data;
-    console.log(`📦 Processing purchase for user ${userId}`);
+    
+    /**
+     * 🎯 MEMORY PROTECTOR: 
+     * Logging thousands of lines to stdout during a sale can cause Render 
+     * to hit its 512MB RAM limit. We keep this disabled for production.
+     */
+    // console.log(`📦 Processing purchase for user ${userId}`);
 
     try {
       const purchaseResult = await stockService.purchaseItem(productId);
@@ -41,6 +47,10 @@ const worker = new Worker(
         }
       }));
     } catch (dbError) {
+      /**
+       * 🎯 ERROR LOGGING:
+       * We keep error logs enabled so you can still debug critical failures.
+       */
       console.error(`🚨 Database error:`, dbError);
       throw dbError; 
     }

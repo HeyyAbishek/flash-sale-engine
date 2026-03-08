@@ -11,6 +11,7 @@
     "seed": "tsx prisma/seed.ts",
     "test": "node stress-test.js",
     "build": "tsc -b && vite build",
+    "start": "node --max-old-space-size=450 dist/api/server.js",
     "lint": "eslint .",
     "preview": "vite preview",
     "check": "tsc --noEmit"
