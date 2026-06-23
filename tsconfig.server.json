@@ -5,7 +5,8 @@
     "moduleResolution": "NodeNext",
     "outDir": "./dist",
     "rootDir": "./",
-    "noEmit": false
+    "noEmit": false,
+    "allowImportingTsExtensions": false
   },
   "include": ["api/**/*"]
 }
