@@ -1,4 +1,4 @@
-# Flash Sale Engine - High-Concurrency E-Commerce System
+# Flash Sale Engine - High-Concurrency E-Commerce Backend
 
 ![Status](https://img.shields.io/badge/Status-Production-success)
 ![Concurrency](https://img.shields.io/badge/Concurrency-10k%2B_Concurrent-blueviolet)
