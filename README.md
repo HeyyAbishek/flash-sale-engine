@@ -1,10 +1,14 @@
 # Flash Sale Engine - High-Concurrency E-Commerce System
 
 ![Status](https://img.shields.io/badge/Status-Production-success)
-![Concurrency](https://img.shields.io/badge/Concurrency-10k_Req%2Fs-blueviolet)
-![Latency](https://img.shields.io/badge/Latency-%3C100ms-green)
+![Concurrency](https://img.shields.io/badge/Concurrency-10k%2B_Concurrent-blueviolet)
+![Latency](https://img.shields.io/badge/Latency-%3C50ms-green)
+![Architecture](https://img.shields.io/badge/Architecture-Event--Driven-orange)
+![Database](https://img.shields.io/badge/Database-PostgreSQL%20%7C%20Prisma-blue)
+![Queue](https://img.shields.io/badge/Queue-Redis%20%7C%20BullMQ-red)
+![Realtime](https://img.shields.io/badge/Realtime-Socket.io-orange)
 
-**Flash Sale Engine** is a production-grade backend system designed to handle extreme traffic spikes during limited-inventory drops. It solves the "Double Booking" problem using **Postgres Row-Level Locking**, **Redis Queues**, and **WebSockets**.
+**Flash Sale Engine** is a production-grade, high-concurrency backend engineered to handle extreme traffic spikes and prevent overselling during limited-inventory flash sales. It guarantees inventory consistency using **PostgreSQL row-level locking** and transactional processing, while **Redis** and **BullMQ** handle asynchronous workloads and **Socket.io** delivers real-time inventory updates to connected clients.
 
 <img width="1919" height="1021" alt="Screenshot 2026-03-09 004514" src="https://github.com/user-attachments/assets/5a0b5355-a81f-4ce8-933d-305f73b08cb3" />
 
